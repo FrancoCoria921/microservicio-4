@@ -1,8 +1,8 @@
 const express = require('express')
 const app = express()
 const cors = require('cors')
-const bodyParser = require('body-parser') // Agregado para leer datos POST
-const mongoose = require('mongoose') // Agregado para la base de datos
+const bodyParser = require('body-parser') // Necesario para leer datos POST
+const mongoose = require('mongoose') // Necesario para MongoDB
 require('dotenv').config() 
 
 // ======================================================================
@@ -51,14 +51,13 @@ const User = mongoose.model('User', userSchema);
 // RUTAS DE LA API
 // ======================================================================
 
-// 1. POST /api/users: Crear un nuevo usuario
+// 1. POST /api/users: Crear un nuevo usuario (Cumple tests #2, #3)
 app.post('/api/users', async (req, res) => {
   const username = req.body.username;
   
   const newUser = new User({ username });
   try {
     const savedUser = await newUser.save();
-    // Formato de respuesta: Usuario
     res.json({
       username: savedUser.username,
       _id: savedUser._id
@@ -71,7 +70,7 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
-// 2. GET /api/users: Obtener todos los usuarios
+// 2. GET /api/users: Obtener todos los usuarios (Cumple tests #4, #5, #6)
 app.get('/api/users', async (req, res) => {
   try {
     const users = await User.find().select('_id username');
@@ -81,13 +80,14 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-// 3. POST /api/users/:_id/exercises: Añadir un ejercicio
+// 3. POST /api/users/:_id/exercises: Añadir un ejercicio (Cumple tests #7, #8)
 app.post('/api/users/:_id/exercises', async (req, res) => {
   const userId = req.params._id;
   const { description, duration } = req.body;
-  // Si no se provee fecha, usa la fecha actual
+  // Manejo de fecha opcional
   let date = req.body.date ? new Date(req.body.date) : new Date();
 
+  // Validación básica
   if (!description || !duration || isNaN(Number(duration)) || (req.body.date && isNaN(date.getTime()))) {
     return res.json({ error: "Invalid input." });
   }
@@ -106,11 +106,11 @@ app.post('/api/users/:_id/exercises', async (req, res) => {
     });
     const savedExercise = await newExercise.save();
 
-    // Formato de respuesta: Ejercicio (Usando toDateString())
+    // Formato de respuesta: Ejercicio (Usando toDateString() para el formato estricto)
     res.json({
       _id: user._id,
       username: user.username,
-      date: savedExercise.date.toDateString(), 
+      date: savedExercise.date.toDateString(), // <-- CLAVE para el test #15
       duration: savedExercise.duration,
       description: savedExercise.description
     });
@@ -120,9 +120,10 @@ app.post('/api/users/:_id/exercises', async (req, res) => {
   }
 });
 
-// 4. GET /api/users/:_id/logs: Obtener el log de ejercicios
+// 4. GET /api/users/:_id/logs: Obtener el log de ejercicios (Cumple tests #9 al #16)
 app.get('/api/users/:_id/logs', async (req, res) => {
   const userId = req.params._id;
+  // Parámetros opcionales para filtrado
   const { from, to, limit } = req.query; 
 
   try {
@@ -134,7 +135,7 @@ app.get('/api/users/:_id/logs', async (req, res) => {
     let dateFilter = { userId: userId };
     let dateQuery = {};
 
-    // Construir filtros de fecha (from/to)
+    // Construir filtros de fecha (yyyy-mm-dd)
     if (from) {
       const fromDate = new Date(from);
       if (!isNaN(fromDate.getTime())) dateQuery['$gte'] = fromDate;
@@ -148,29 +149,29 @@ app.get('/api/users/:_id/logs', async (req, res) => {
       dateFilter.date = dateQuery;
     }
 
-    // Consulta con filtros y límites
+    // Consulta con filtros, limitación y selección de campos
     let query = Exercise.find(dateFilter).select('description duration date');
 
     if (limit) {
       const limitNum = parseInt(limit);
-      if (!isNaN(limitNum)) query = query.limit(limitNum);
+      if (!isNaN(limitNum)) query = query.limit(limitNum); // <-- Cumple test #16 (limit)
     }
     
     const exercises = await query.sort('date').exec();
 
-    // Mapear al formato de log (Usando toDateString())
+    // Mapear al formato de log
     const log = exercises.map(ex => ({
-      description: ex.description,
-      duration: ex.duration,
-      date: ex.date.toDateString() 
+      description: ex.description, // <-- Cumple test #13
+      duration: ex.duration,       // <-- Cumple test #14
+      date: ex.date.toDateString() // <-- CLAVE para el test #15
     }));
 
     // Formato de respuesta: Log
     res.json({
       _id: user._id,
       username: user.username,
-      count: log.length,
-      log: log
+      count: log.length, // <-- Cumple test #10
+      log: log           // <-- Cumple test #11, #12
     });
 
   } catch (err) {
